@@ -4,15 +4,20 @@ class Mover
   PVector location;
   PVector velocity;
   PVector acceleration;
-
+  
   int sizeSphire;
-
+  float mass;
+  color c;
+  
   Mover()
   {
     location = new PVector(width/2, height/2);
     velocity = new PVector(0, 0);
     acceleration = new PVector(0, 0);
-    sizeSphire = 8;
+    sizeSphire = floor(mass * 8);
+    mass = random(1,3);
+    c = color(random(0,255),random(0,255),random(0,255));
+    c *= mass/255; 
   }
   Mover(float speedX, float speedY)
   {
@@ -20,12 +25,13 @@ class Mover
     velocity = new PVector(speedX, speedY);
     acceleration = new PVector(0, 0);
     sizeSphire = 8;
+    mass = random(1,4);
   }
 
 
   void applayForce(PVector force)
   {
-    acceleration.add(force);
+    acceleration.add(PVector.div(force,mass));
   }
 
   private void applayAccelleretion()
@@ -64,7 +70,6 @@ class Mover
     applayAccelleretion();
     applayVelocity();
     applayRestriction();
-    println(velocity);
   }
 
   void display()
@@ -72,14 +77,14 @@ class Mover
     stroke(0);
     strokeWeight(2);
     fill(127);
-    ellipse(location.x, location.y, sizeSphire, sizeSphire);
+    ellipse(location.x, location.y, mass, mass);
   }
   void display(float x)
   {
     stroke(0);
     strokeWeight(2);
     fill(random(0,255),random(0,255),random(0,255));
-    ellipse(location.x, location.y, sizeSphire, sizeSphire);
+    ellipse(location.x, location.y, mass*8, mass*8);
   }
 
   void freeEdges()

@@ -9,7 +9,7 @@ void setup() {
   f = new Mover(0, 0);
   for (int i=0; i<list.length; i++)
   {
-    list[i] = new Mover(0,0);
+    list[i] = new Mover();
   }
   xoff = 0;
 }
@@ -17,14 +17,18 @@ void setup() {
 void draw() {
   xoff+=.01;
 
-  for (int i=0; i<list.length; i++)
+  for (Mover l : list)
   {
-    PVector g = new PVector(random(-.1,.1),random(-.1,.1));
-    list[i].applayForce(g);
-    list[i].freeEdges();
-    list[i].update();
+    PVector g = new PVector(
+      random(-.1,.1),
+      random(-.1,.1)
+      );
+    
+    l.applayForce(g);
+    l.freeEdges();
+    l.update();
 
-    list[i].display(noise(xoff));
+    l.display(noise(xoff));
   }
 }
 
