@@ -20,15 +20,19 @@ void draw() {
   for (Mover l : list)
   {
     PVector g = new PVector(
-      random(-.1,.1),
-      random(-.1,.1)
+      random(-.1, .1),
+      random(-.1, .1)
       );
-    
+
     l.applayForce(g);
+    l.dragForce(-.3);
+    
     l.freeEdges();
     l.update();
-
-    l.display(noise(xoff));
+    
+    //l.pastello();
+    l.strokee(0,2);
+    l.display();
   }
 }
 
@@ -36,7 +40,7 @@ void draw1()
 {
   background(0);
   PVector v = new PVector(0, 0);
-  PVector g = new PVector(random(-.5,.5),random(-.5,.5));
+  PVector g = new PVector(random(-.5, .5), random(-.5, .5));
 
   f.applayForce(v);
   f.applayForce(g);

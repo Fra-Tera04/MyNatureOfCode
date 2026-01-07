@@ -4,34 +4,34 @@ class Mover
   PVector location;
   PVector velocity;
   PVector acceleration;
-  
-  int sizeSphire;
+
+  int sizich;
   float mass;
   color c;
-  
+
   Mover()
   {
     location = new PVector(width/2, height/2);
     velocity = new PVector(0, 0);
     acceleration = new PVector(0, 0);
-    sizeSphire = floor(mass * 8);
-    mass = random(1,3);
-    c = color(random(0,255),random(0,255),random(0,255));
-    c *= mass/255; 
+    mass = random(1, 3);
+    sizich = floor(mass * 9);
+    c = color(random(0, 255), random(0, 255), random(0, 255));
+    c *= mass/255;
   }
   Mover(float speedX, float speedY)
   {
     location = new PVector(width/2, height/2);
     velocity = new PVector(speedX, speedY);
     acceleration = new PVector(0, 0);
-    sizeSphire = 8;
-    mass = random(1,4);
+    mass = random(1, 4);
+    sizich = floor(mass * 8);
   }
 
 
   void applayForce(PVector force)
   {
-    acceleration.add(PVector.div(force,mass));
+    acceleration.add(PVector.div(force, mass));
   }
 
   private void applayAccelleretion()
@@ -68,23 +68,26 @@ class Mover
   void update()
   {
     applayAccelleretion();
+    //accellearateToTheMouse();
     applayVelocity();
     applayRestriction();
   }
 
+  void pastello()
+  {
+    noStroke();
+  }
+  void strokee(color stroke, int weight)
+  {
+    stroke(stroke);
+    strokeWeight(weight);
+  }
   void display()
   {
-    stroke(0);
-    strokeWeight(2);
-    fill(127);
-    ellipse(location.x, location.y, mass, mass);
-  }
-  void display(float x)
-  {
-    stroke(0);
-    strokeWeight(2);
-    fill(random(0,255),random(0,255),random(0,255));
-    ellipse(location.x, location.y, mass*8, mass*8);
+
+    //fill(127);
+    fill(c);
+    ellipse(location.x, location.y, sizich, sizich);
   }
 
   void freeEdges()
@@ -96,7 +99,7 @@ class Mover
   }
   void bouncingEdges()
   {
-    if ( location.x > width )
+    if ( location.x > width + mass)
     {
       location.x = width;
       velocity.x *= -1;
@@ -115,6 +118,36 @@ class Mover
     {
       location.y = 0;
       velocity.y *= -1;
+    }
+  }
+
+  void friction(Mover l) {
+    if (mousePressed)
+    {
+      PVector friction = l.velocity.copy();
+      friction.normalize();
+      friction.mult(-1);
+      // mu = coefficente di frizione:
+      friction.mult(.01);
+      PVector vento = new PVector(.01, 0);
+      l.applayForce(vento);
+
+      //PVector veroIlMouse = new PVector(mouseX-l.location.x, mouseY-l.location.y);
+      //veroIlMouse.setMag(.1);
+      //l.applayForce(veroIlMouse);
+    }
+  }
+  void dragForce(float cc)
+  {
+    if(mousePressed)
+    {
+      PVector drag = this.velocity.copy();
+      drag.normalize();
+      float c = -0.1+cc;
+      float speed = this.velocity.mag();
+      drag.mult(c*speed*speed);
+      
+      this.applayForce(drag);
     }
   }
 }
