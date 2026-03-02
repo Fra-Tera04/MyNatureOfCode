@@ -5,7 +5,11 @@ class Mover {
   PVector velocity;
   PVector acceleration;
   float mass;
-  
+  float mass_mult = 16;
+  float r = mass * mass_mult / 2;
+  float G = 1;
+
+
 
   Mover(float m, float x, float y) {
     mass = m;
@@ -28,8 +32,29 @@ class Mover {
   void display() {
     stroke(0);
     strokeWeight(2);
-    fill(0, 127);
-    ellipse(position.x, position.y, mass*16, mass*16);
+    fill(255, 100);
+    ellipse(position.x, position.y, mass*mass_mult, mass*mass_mult);
+  }
+
+  PVector attract(Mover a)
+  {
+    PVector force = PVector.sub(position, a.position);
+
+    float d = constrain(force.mag(), 2, 10);
+    force.normalize();
+    float forza = (G * mass * a.mass) / (d * d);
+    force.mult(forza);
+
+    return force;
+  }
+
+  void clicked(int x, int y)
+  {
+    float d = dist(x, y, position.x, position.y);
+    if ( d < r )
+    {
+      // da continuare
+    }
   }
 
   void checkEdges() {
