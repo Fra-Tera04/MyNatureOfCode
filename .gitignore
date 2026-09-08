@@ -1,3 +1,9 @@
+
+tools/
+libraries/
+modes/
+examples/
+
 .DS_Store
 applet
 application.linux-arm64
