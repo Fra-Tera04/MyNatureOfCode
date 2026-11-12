@@ -1,173 +1,180 @@
-PFont font;
+// Costanti di stato
+final int STATO_MENU = 0;
+final int STATO_UNO = 1;
+final int STATO_VENTI = 2;
+final int STATO_SEI = 3;
 
-boolean menu;
-int stato = 0;
+// Costanti di configurazione e UI
+final char TASTO_INDIETRO = 'f';
+final char SIMBOLO_PIENO = 'X';
+final String SEPARATORE_RIGHE = "/";
+
+// Pattern compatti (N x N per mantenere celle quadrate)
+final String PATTERN_SEI =
+  "XX. / " +
+  "XXX / " +
+  ".XX";
+
+final String PATTERN_VENTI =
+  ".XXX. / " +
+  "XXXXX / " +
+  "XX.XX / " +
+  "XXXXX / " +
+  ".XXX.";
+
+final String NOME_FONT = "SansSerif"; // Compatibile con Linux/Pop!_OS senza warning
+final int FONT_TITOLO = 48;
+final int FONT_SOTTOTITOLO = 16;
+final int FONT_CARD = 28;
+final int MARGINE_TESTO = 10;
+
+final color COLORE_SFONDO = color(0);
+final color COLORE_TESTO = color(255);
+final color COLORE_SOTTOTITOLO = color(180);
+final color GRADIENTE_INIZIO = color(10, 10, 30);
+final color GRADIENTE_FINE = color(30, 10, 50);
+
+PFont font;
+int stato = STATO_MENU;
+Card[] menuCards;
+
+// volatile garantisce la visibilità immediata tra il thread degli eventi e il thread di draw()
+volatile ArrayList<Quadro> quadri = new ArrayList<Quadro>();
 
 void setup() {
   size(800, 800);
-  background(0);
   noLoop();
-
-  font = createFont("Arial", 32);
+  font = createFont(NOME_FONT, FONT_TITOLO);
   textFont(font);
+
+  inizializzaMenu();
+}
+
+void inizializzaMenu() {
+  int numCard = 3;
+  menuCards = new Card[numCard];
+
+  float latoCard = width / 4.0;
+  float passo = latoCard;
+  float offsetIniziale = latoCard / 2.0;
+
+  String[] etichette = {"Uno", "Sei", "Venti"};
+  int[] statiTarget = {STATO_UNO, STATO_SEI, STATO_VENTI};
+  color[] colori = {
+    color(80, 120, 220),
+    color(220, 100, 150),
+    color(100, 200, 150)
+  };
+
+  for (int i = 0; i < numCard; i++) {
+    float pos = offsetIniziale + i * passo;
+    menuCards[i] = new Card(pos, pos, latoCard, latoCard, etichette[i], colori[i], statiTarget[i]);
+  }
 }
 
 void draw() {
-  background(0);
-  if (stato == 0) menu();
-  else if (stato == 1) uno();
-  else if (stato == 2) venti();
+  background(COLORE_SFONDO);
+  if (stato == STATO_MENU) {
+    disegnaMenu();
+  } else {
+    // Cattura un riferimento locale immutabile per questo frame: evita ConcurrentModificationException
+    ArrayList<Quadro> snapshotQuadri = quadri;
+    for (Quadro q : snapshotQuadri) {
+      q.display();
+    }
+    mostraIstruzioni();
+  }
 }
 
-
-void menu() {
-  // Sfondo con leggero gradiente verticale
+void disegnaMenu() {
   for (int y = 0; y < height; y++) {
     float t = map(y, 0, height, 0, 1);
-    stroke(lerpColor(color(10, 10, 30), color(30, 10, 50), t));
+    stroke(lerpColor(GRADIENTE_INIZIO, GRADIENTE_FINE, t));
     line(0, y, width, y);
   }
 
-  // Titolo
-  fill(255);
+  float centroX = width / 2.0;
+  float posTitoloY = height * 0.075;
+  float posSottotitoloY = height * 0.125;
+
+  fill(COLORE_TESTO);
   textAlign(CENTER, CENTER);
-  textSize(48);
-  text("MENU", width/2, 60);
+  textSize(FONT_TITOLO);
+  text("MENU", centroX, posTitoloY);
 
-  textSize(16);
-  fill(180);
-  text("Scegli il numero di quadri", width/2, 100);
+  textSize(FONT_SOTTOTITOLO);
+  fill(COLORE_SOTTOTITOLO);
+  text("Scegli il numero di quadri", centroX, posSottotitoloY);
 
-  // Card dinamiche invece di rettangoli fissi
-  drawCard(100, 100, 200, 200, "Uno", color(80, 120, 220));
-  drawCard(300, 300, 200, 200, "Sei", color(220, 100, 150));
-  drawCard(500, 500, 200, 200, "Venti", color(100, 200, 150));
-
-  textAlign(LEFT, BASELINE); // reset per non rompere altre parti dello sketch
-}
-
-void drawCard(float x, float y, float w, float h, String label, color base) {
-
-  // Ombra leggera
-  noStroke();
-  rectMode(CORNER);
-  
-  fill(base);
-
-  rect(x, y, w, h, 16);
-
-  // Bordo sottile
-  noFill();
-  stroke(255, 80);
-  strokeWeight(1);
-  rect(x, y, w, h, 16);
-
-  // Testo centrato nella card
-  noStroke();
-  fill(255);
-  textAlign(CENTER, CENTER);
-  textSize(28);
-  text(label, x + w/2, y + h/2);
-}
-
-void menu2()
-{
-  background(0);
-  rectMode(CORNER);
-
-  fill(255);
-  textSize(32);
-
-  text("Uno", 100, 90);
-  rect(100, 100, 200, 200);
-
-  text("Sei", 310, 290);
-  rect(300, 300, 200, 200);
-
-  text("Venti", 510, 490);
-  rect(500, 500, 200, 200);
-}
-
-void uno()
-{
-  background(0);
-  for (int n=1; n < 10; n++) {
-    stroke(random(255), random(255), random(255));
-    for (int i=0; i < 360; i+=1) {
-      float x = random(50, 150);
-      float xx = random(150, 350);
-
-      pushMatrix();
-      translate(width/2, height/2);
-      rotate(radians(i));
-      strokeCap(CORNER);
-      strokeWeight(10-n);
-
-      line(x, 0, xx, 0);
-
-      popMatrix();
-    }
+  for (Card c : menuCards) {
+    c.display();
   }
-
-  fill(255);
-  text("clicca F per tonrare indietro", 10, height-10);
 }
 
-void venti()
-{
+void mostraIstruzioni() {
+  fill(COLORE_TESTO);
+  textAlign(LEFT, BASELINE);
+  textSize(FONT_SOTTOTITOLO);
+  text("Premi " + Character.toUpperCase(TASTO_INDIETRO) + " per tornare indietro | Premi un'altra lettera per rigenerare", MARGINE_TESTO, height - MARGINE_TESTO);
+}
 
-  //wh/l=y
+void generaQuadri(int nuovoStato) {
+  if (nuovoStato == STATO_UNO) {
+    ArrayList<Quadro> nuovaLista = new ArrayList<Quadro>();
+    float centroX = width / 2.0;
+    float centroY = height / 2.0;
+    float scalaSingola = (float) width / Quadro.DIAMETRO_BASE;
+    nuovaLista.add(new Quadro(centroX, centroY, width, scalaSingola, false));
+    quadri = nuovaLista; // Sostituzione atomica del riferimento
+  } else if (nuovoStato == STATO_VENTI) {
+    multiPattern(PATTERN_VENTI);
+  } else if (nuovoStato == STATO_SEI) {
+    multiPattern(PATTERN_SEI);
+  }
+}
 
-  for (int l=-50; l < width+100; l+=100) {
-    for (int m=-50; m < height-100; m+=100) {
-      pushMatrix();
-      noStroke();
-      rectMode(CENTER);
-      fill(random(255), random(255), random(255));
-      rect(l, m, 100, 100);
+void multiPattern(String pattern) {
+  // Costruisce la lista off-screen prima di pubblicarla al thread di rendering
+  ArrayList<Quadro> nuovaLista = new ArrayList<Quadro>();
+  String[] righe = split(pattern, SEPARATORE_RIGHE.charAt(0));
+  int n = righe.length;
+  float latoCella = (float) width / n;
+  float metaCella = latoCella / 2.0;
+  float scala = latoCella / Quadro.DIAMETRO_BASE;
 
-
-      translate(l, m);
-      scale(.14);
-
-      for (int n=1; n < 10; n++) {
-        stroke(random(0, 255), random(0, 255), random(0, 255));
-        for (int i=0; i < 360; i+=1) {
-          float x = random(50, 150);
-          float xx = random(150, 350);
-
-          pushMatrix();
-          rotate(radians(i));
-          strokeCap(CORNER);
-          strokeWeight(10-n);
-
-          line(x, 0, xx, 0);
-
-          popMatrix();
-        }
+  for (int r = 0; r < n; r++) {
+    String rigaCorrente = trim(righe[r]);
+    for (int c = 0; c < rigaCorrente.length(); c++) {
+      if (rigaCorrente.charAt(c) == SIMBOLO_PIENO) {
+        float x = c * latoCella + metaCella;
+        float y = r * latoCella + metaCella;
+        nuovaLista.add(new Quadro(x, y, latoCella, scala, true));
       }
-      popMatrix();
     }
   }
 
-  fill(255);
-  text("clicca F per tonrare indietro", 10, height-10);
+  quadri = nuovaLista; // Sostituzione atomica
 }
-
 
 void mousePressed() {
-  if (stato == 0) {
-    if (mouseX > 100 && mouseX < 300 && mouseY > 100 && mouseY < 300) stato = 1;
-    if (mouseX > 500 && mouseX < 700 && mouseY > 500 && mouseY < 700) stato = 2;
-    if (mouseX > 300 && mouseX < 500 && mouseY > 300 && mouseY < 500) stato = 3;
-
-    redraw();
+  if (stato == STATO_MENU) {
+    for (Card c : menuCards) {
+      if (c.isClicked(mouseX, mouseY)) {
+        stato = c.targetState;
+        generaQuadri(stato);
+        redraw();
+        break;
+      }
+    }
   }
 }
 
-void keyPressed()
-{
-  if (key=='f' || key=='F')
-    stato = 0;
-  redraw();
+void keyPressed() {
+  if (Character.toLowerCase(key) == TASTO_INDIETRO) {
+    stato = STATO_MENU;
+    redraw();
+  } else if (stato != STATO_MENU && key != CODED && Character.isLetter(key)) {
+    generaQuadri(stato);
+    redraw();
+  }
 }
