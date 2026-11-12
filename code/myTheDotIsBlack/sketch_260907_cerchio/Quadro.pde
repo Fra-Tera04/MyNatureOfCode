@@ -1,5 +1,4 @@
 class Quadro {
-  // Parametri geometrici intrinseci del Quadro
   static final float RAGGIO_MIN = 50;
   static final float RAGGIO_MEDIO = 150;
   static final float RAGGIO_MAX = 350;
@@ -9,21 +8,25 @@ class Quadro {
   static final int ANGOLO_GIRO = 360;
   static final float MAX_COLORE = 255;
 
-  float x, y, lato, scala;
-  boolean haSfondo;
-  color bgCol;
+  final float x, y, lato, scala;
+  final boolean haSfondo;
+  final color bgCol;
 
-  Quadro(float x, float y, float lato, float scala, boolean haSfondo) {
+  Quadro(float x, float y, float lato, boolean haSfondo) {
     this.x = x;
     this.y = y;
     this.lato = lato;
-    this.scala = scala;
+    this.scala = lato / DIAMETRO_BASE;
     this.haSfondo = haSfondo;
     this.bgCol = generaColoreCasuale();
   }
 
   color generaColoreCasuale() {
     return color(random(MAX_COLORE), random(MAX_COLORE), random(MAX_COLORE));
+  }
+
+  float getDiametroEffettivo() {
+    return DIAMETRO_BASE * scala;
   }
 
   void display() {
