@@ -3,6 +3,7 @@ tools/
 libraries/
 modes/
 examples/
+.vscode/
 
 .DS_Store
 applet
