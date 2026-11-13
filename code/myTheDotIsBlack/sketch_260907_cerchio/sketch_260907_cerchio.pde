@@ -36,43 +36,6 @@ final color GRADIENTE_FINE = color(30, 10, 50);
 final color COLORE_TOGGLE_ON = color(70, 180, 120);
 final color COLORE_TOGGLE_OFF = color(140, 70, 80);
 
-/**
- * Definisce in modo dichiarativo le modalità di visualizzazione disponibili nel menu.
- * Ogni costante incapsula l'etichetta UI, la matrice testuale del pattern e il colore ARGB.
- */
-enum Modalita {
-  UNO("Uno", "X", 0xFF5078DC), // RGB(80, 120, 220)
-    SEI("Sei", "XX. / XXX / .XX", 0xFFDC6496), // RGB(220, 100, 150)
-    NOVE("Nove", "XXX / XXX / XXX", 0xFFB46EDC), // RGB(180, 110, 220)
-    VENTI("Venti", ".XXX. / XXXXX / XX.XX / XXXXX / .XXX.", 0xFF64C896); // RGB(100, 200, 150)
-
-  final String etichetta;
-  final String pattern;
-  final color colore;
-
-  /**
-   * Costruttore della modalità.
-   *
-   * @param etichetta Nome visualizzato sulla Card del menu.
-   * @param pattern   Stringa che codifica la disposizione spaziale dei quadri.
-   * @param colore    Colore esadecimale ARGB associato alla Card.
-   */
-  Modalita(String etichetta, String pattern, color colore) {
-    this.etichetta = etichetta;
-    this.pattern = pattern;
-    this.colore = colore;
-  }
-
-  /**
-   * Restituisce il colore associato alla modalità.
-   *
-   * @return Valore intero color ARGB.
-   */
-  color getColore() {
-    return colore;
-  }
-}
-
 PFont font;
 PGraphics sfondoMenuBuffer;
 Modalita modalitaCorrente = null;
@@ -210,15 +173,87 @@ void mostraIstruzioni() {
 }
 
 /**
- * Analizza il pattern della modalità specificata, calcola le coordinate baricentriche
- * nell'area utile (esclusa la barra info) e pubblica atomicamente la nuova lista di Quadri.
+ * Compila una stringa DSL (comandi geometrici o matrice esplicita) in una griglia booleana N x N.
  *
- * @param modalita La configurazione Modalita da istanziare.
+ * @param pattern Stringa di configurazione (es. "8x8; riempi" oppure "5x5; bordo; -angoli").
+ * @return Matrice booleana dove true indica la presenza di un Quadro.
+ */
+boolean[][] valutaPattern(String pattern) {
+  String pulito = trim(pattern).toLowerCase();
+
+  // Caso 1: Matrice manuale esplicita (es. "XX. / XXX / .XX")
+  if (pulito.contains(String.valueOf(SEPARATORE_RIGHE))) {
+    String[] righe = split(pattern, SEPARATORE_RIGHE);
+    int n = righe.length;
+    boolean[][] griglia = new boolean[n][n];
+    for (int r = 0; r < n; r++) {
+      String riga = trim(righe[r]);
+      for (int c = 0; c < min(n, riga.length()); c++) {
+        griglia[r][c] = (riga.charAt(c) == SIMBOLO_PIENO);
+      }
+    }
+    return griglia;
+  }
+
+  // Caso 2: Comandi dichiarativi (es. "8x8; riempi; -centro")
+  String[] istruzioni = split(pulito, ';');
+
+  // Estrae la dimensione N dal primo token (es. "8x8" -> 8)
+  String[] dimTokens = split(trim(istruzioni[0]), 'x');
+  int n = int(trim(dimTokens[0]));
+  boolean[][] griglia = new boolean[n][n];
+
+  for (int i = 1; i < istruzioni.length; i++) {
+    String cmd = trim(istruzioni[i]);
+    boolean valore = !cmd.startsWith("-"); // Prefisso '-' sottrae celle
+    if (!valore) cmd = cmd.substring(1);
+
+    for (int r = 0; r < n; r++) {
+      for (int c = 0; c < n; c++) {
+        boolean match = false;
+
+        switch (cmd) {
+        case "riempi":
+          match = true;
+          break;
+        case "bordo":
+          match = (r == 0 || r == n - 1 || c == 0 || c == n - 1);
+          break;
+        case "scacchiera":
+          match = ((r + c) % 2 == 0);
+          break;
+        case "diagonali":
+          match = (r == c || r + c == n - 1);
+          break;
+        case "centro":
+          match = (r == n / 2 && c == n / 2);
+          break;
+        case "angoli":
+          match = ((r == 0 || r == n - 1) && (c == 0 || c == n - 1));
+          break;
+        case "croce":
+          match = (r == n / 2 || c == n / 2);
+          break;
+        }
+
+        if (match) {
+          griglia[r][c] = valore;
+        }
+      }
+    }
+  }
+  return griglia;
+}
+
+/**
+ * Genera i Quadri posizionandoli secondo la matrice prodotta da valutaPattern().
+ *
+ * @param modalita La modalità selezionata dal menu.
  */
 void generaQuadri(Modalita modalita) {
   ArrayList<Quadro> nuovaLista = new ArrayList<Quadro>();
-  String[] righe = split(modalita.pattern, SEPARATORE_RIGHE);
-  int dimensioneGriglia = righe.length;
+  boolean[][] griglia = valutaPattern(modalita.pattern);
+  int dimensioneGriglia = griglia.length;
 
   float altezzaUtile = height - ALTEZZA_BARRA_INFO;
   float areaGriglia = min(width, altezzaUtile);
@@ -229,9 +264,8 @@ void generaQuadri(Modalita modalita) {
   float offsetY = (altezzaUtile - areaGriglia) / 2.0f;
 
   for (int r = 0; r < dimensioneGriglia; r++) {
-    String rigaCorrente = trim(righe[r]);
-    for (int c = 0; c < rigaCorrente.length(); c++) {
-      if (rigaCorrente.charAt(c) == SIMBOLO_PIENO) {
+    for (int c = 0; c < dimensioneGriglia; c++) {
+      if (griglia[r][c]) {
         float x = offsetX + c * latoCella + metaCella;
         float y = offsetY + r * latoCella + metaCella;
         nuovaLista.add(new Quadro(x, y, latoCella, sfondoAttivo));
