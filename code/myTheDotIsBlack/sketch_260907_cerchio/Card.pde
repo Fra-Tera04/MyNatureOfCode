@@ -1,78 +1,66 @@
-class Card {
-  static final float RAGGIO_ANGOLI = 16;
-  static final float OPACITA_BORDO = 80;
-  static final float SPESSORE_BORDO = 1;
+/**
+ * Rappresenta una Card di selezione nel menu principale associata a una specifica Modalita.
+ */
+class Card extends UIElement {
+  static final float RAGGIO_DEFAULT = 16.0f;
+  static final float OPACITA_DEFAULT = 80.0f;
 
-  final float x, y, w, h;
   final Modalita modalita;
 
+  /**
+   * Costruisce una nuova Card associata a una modalità di gioco/visualizzazione.
+   *
+   * @param x        Coordinata X superiore sinistra.
+   * @param y        Coordinata Y superiore sinistra.
+   * @param w        Larghezza della Card.
+   * @param h        Altezza della Card.
+   * @param modalita Riferimento all'enum Modalita corrispondente.
+   */
   Card(float x, float y, float w, float h, Modalita modalita) {
-    this.x = x;
-    this.y = y;
-    this.w = w;
-    this.h = h;
+    super(x, y, w, h, RAGGIO_DEFAULT, OPACITA_DEFAULT);
     this.modalita = modalita;
   }
 
+  /**
+   * Esegue il rendering della Card utilizzando il colore e l'etichetta della modalità.
+   */
   void display() {
-    noStroke();
-    rectMode(CORNER);
-    fill(modalita.getColore());
-    rect(x, y, w, h, RAGGIO_ANGOLI);
-
-    noFill();
-    stroke(COLORE_TESTO, OPACITA_BORDO);
-    strokeWeight(SPESSORE_BORDO);
-    rect(x, y, w, h, RAGGIO_ANGOLI);
-
-    noStroke();
-    fill(COLORE_TESTO);
-    textAlign(CENTER, CENTER);
-    textSize(FONT_CARD);
-    text(modalita.etichetta, x + w / 2.0, y + h / 2.0);
-  }
-
-  boolean isClicked(float mx, float my) {
-    return (mx > x && mx < x + w && my > y && my < y + h);
+    disegnaBox(modalita.getColore());
+    disegnaTestoCentrato(modalita.etichetta, FONT_CARD);
   }
 }
 
-class ToggleButton {
-  static final float RAGGIO_ANGOLI = 12;
-  static final float OPACITA_BORDO = 100;
-  static final float SPESSORE_BORDO = 1;
+/**
+ * Rappresenta un pulsante di commutazione booleana (SÌ/NO) per le impostazioni del menu.
+ */
+class ToggleButton extends UIElement {
+  static final float RAGGIO_DEFAULT = 12.0f;
+  static final float OPACITA_DEFAULT = 100.0f;
 
-  final float x, y, w, h;
   final String etichetta;
 
+  /**
+   * Costruisce un pulsante Toggle.
+   *
+   * @param x         Coordinata X superiore sinistra.
+   * @param y         Coordinata Y superiore sinistra.
+   * @param w         Larghezza del pulsante.
+   * @param h         Altezza del pulsante.
+   * @param etichetta Testo descrittivo dell'impostazione.
+   */
   ToggleButton(float x, float y, float w, float h, String etichetta) {
-    this.x = x;
-    this.y = y;
-    this.w = w;
-    this.h = h;
+    super(x, y, w, h, RAGGIO_DEFAULT, OPACITA_DEFAULT);
     this.etichetta = etichetta;
   }
 
+  /**
+   * Esegue il rendering del pulsante riflettendo visivamente lo stato booleano corrente.
+   *
+   * @param attivo Stato corrente dell'opzione (true = SÌ, false = NO).
+   */
   void display(boolean attivo) {
-    noStroke();
-    rectMode(CORNER);
-    fill(attivo ? COLORE_TOGGLE_ON : COLORE_TOGGLE_OFF);
-    rect(x, y, w, h, RAGGIO_ANGOLI);
-
-    noFill();
-    stroke(COLORE_TESTO, OPACITA_BORDO);
-    strokeWeight(SPESSORE_BORDO);
-    rect(x, y, w, h, RAGGIO_ANGOLI);
-
-    noStroke();
-    fill(COLORE_TESTO);
-    textAlign(CENTER, CENTER);
-    textSize(FONT_TOGGLE);
+    disegnaBox(attivo ? COLORE_TOGGLE_ON : COLORE_TOGGLE_OFF);
     String statoTesto = attivo ? "SÌ" : "NO";
-    text(etichetta + ": " + statoTesto, x + w / 2.0, y + h / 2.0);
-  }
-
-  boolean isClicked(float mx, float my) {
-    return (mx > x && mx < x + w && my > y && my < y + h);
+    disegnaTestoCentrato(etichetta + ": " + statoTesto, FONT_TOGGLE);
   }
 }
