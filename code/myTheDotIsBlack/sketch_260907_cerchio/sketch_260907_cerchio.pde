@@ -3,25 +3,25 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 
-/* Sketch principale per la generazione procedurale di quadri radiali su griglia.
- * Gestisce la macchina a stati (Menu vs Vista Quadri), il layout responsivo e gli input utente.
+/**
+ * Sketch principale per la generazione procedurale di quadri radiali su griglia.
+ * Coordina la macchina a stati (StatoApp), il layout responsivo e la delega ai moduli di dominio.
  */
 
-// Costanti di input e sintassi del Domain-Specific Language (DSL) dei pattern
-final char TASTO_INDIETRO = 'f';
-final char SIMBOLO_PIENO = 'X';
-final char SIMBOLO_VUOTO = '.';
-final char SEPARATORE_RIGHE = '/';
-final int DIM_GRIGLIA_MIN = 1;
-final int DIM_GRIGLIA_MAX = 25;
+enum StatoApp {
+  MENU,
+    EDITOR,
+    QUADRI
+}
 
-// Tipografia e layout
+// Costanti di navigazione, tipografia e layout
+final char TASTO_INDIETRO = 'f';
 final String NOME_FONT = "SansSerif";
 final int FONT_TITOLO = 44;
 final int FONT_SOTTOTITOLO = 16;
 final int FONT_CARD = 26;
 final int FONT_TOGGLE = 18;
-final int FONT_GUIDA = 14;
+final int FONT_INPUT_EDITOR = 20;
 
 final float RAPPORTO_TITOLO_Y = 0.07f;
 final float RAPPORTO_SOTTOTITOLO_Y = 0.12f;
@@ -35,7 +35,16 @@ final float ALTEZZA_PULSANTE_MENU = 48.0f;
 final float SPAZIO_PULSANTI_BASSO = 20.0f;
 final float MARGINE_TOGGLE_BASSO = 45.0f;
 
-// Palette
+final float BOX_EDITOR_X = 50.0f;
+final float BOX_EDITOR_Y = 405.0f;
+final float BOX_EDITOR_H = 64.0f;
+final float LARGHEZZA_BOTTONE_EDITOR = 200.0f;
+final float ALTEZZA_BOTTONE_EDITOR = 48.0f;
+final float SPAZIO_BOTTONI_EDITOR = 24.0f;
+final float MARGINE_BOTTONI_EDITOR_BASSO = 110.0f;
+final String PLACEHOLDER_EDITOR = "Scrivi qui il tuo pattern (es. 6x6; bordo; croce)...";
+
+// Palette UI
 final color COLORE_SFONDO = color(0);
 final color COLORE_BARRA_INFO = color(18, 18, 28);
 final color COLORE_BOX_INPUT = color(28, 28, 48);
@@ -49,42 +58,23 @@ final color COLORE_BOTTONE_CUSTOM = color(70, 130, 210);
 final color COLORE_ERRORE = color(255, 95, 95);
 final color COLORE_VALIDO = color(100, 230, 150);
 
-final Set<String> COMANDI_VALIDI = new HashSet<String>(
-  Arrays.asList("riempi", "bordo", "scacchiera", "diagonali", "croce", "centro", "angoli")
-  );
-
+// Componenti e stato dell'applicazione
 PFont font;
 PGraphics sfondoMenuBuffer;
 
-// Stati dell'applicazione
-Modalita modalitaCorrente = null;
+StatoApp statoCorrente = StatoApp.MENU;
+PatternEngine patternEngine = new PatternEngine();
+RisultatoValidazione validazioneCorrente;
+
 String patternAttivo = null;
-boolean editorAperto = false;
 boolean sfondoAttivo = true;
-
-// Costanti posizione casella input editor
-final float BOX_EDITOR_X = 80.0f;
-final float BOX_EDITOR_Y = 405.0f;
-final float BOX_EDITOR_H = 64.0f;
-final float PADDING_TESTO_EDITOR = 20.0f;
-final int FONT_INPUT_EDITOR = 20;
-
-// Stato dell'editor di pattern (vuoto all'avvio)
-String inputUtente = "";
-int indiceCursore = 0; // Posizione del cursore (0 <= indiceCursore <= inputUtente.length())
-String messaggioValidazione = "";
-boolean patternValido = false;
 
 Card[] menuCards;
 ToggleButton toggleSfondo;
 ActionButton btnApriEditor;
 ActionButton btnConfermaEditor;
 ActionButton btnAnnullaEditor;
-final float LARGHEZZA_BOTTONE_EDITOR = 200.0f;
-final float ALTEZZA_BOTTONE_EDITOR = 48.0f;
-final float SPAZIO_BOTTONI_EDITOR = 24.0f;
-final float MARGINE_BOTTONI_EDITOR_BASSO = 110.0f;
-final String PLACEHOLDER_EDITOR = "Scrivi qui il tuo pattern (es. 6x6; bordo; croce)...";
+TextInputField campoInputPattern;
 
 volatile ArrayList<Quadro> quadri = new ArrayList<Quadro>();
 
@@ -98,7 +88,6 @@ void setup() {
   creaBufferSfondoMenu();
   inizializzaMenu();
   inizializzaEditor();
-  aggiornaValidazione();
 }
 
 void creaBufferSfondoMenu() {
@@ -142,7 +131,6 @@ void inizializzaMenu() {
     menuCards[i] = new Card(x, y, latoCard, latoCard, tutteLeModalita[i]);
   }
 
-  // Due pulsanti affiancati in basso: Toggle Sfondo + Pattern Personalizzato
   float larghezzaTotPulsanti = LARGHEZZA_PULSANTE_MENU * 2.0f + SPAZIO_PULSANTI_BASSO;
   float startPulsantiX = (width - larghezzaTotPulsanti) / 2.0f;
   float pulsantiY = height - MARGINE_TOGGLE_BASSO - ALTEZZA_PULSANTE_MENU;
@@ -159,6 +147,10 @@ void inizializzaMenu() {
 }
 
 void inizializzaEditor() {
+  float inputW = width - BOX_EDITOR_X * 2.0f;
+  campoInputPattern = new TextInputField(BOX_EDITOR_X, BOX_EDITOR_Y, inputW, BOX_EDITOR_H, PLACEHOLDER_EDITOR);
+  validazioneCorrente = patternEngine.valida(campoInputPattern.getTesto());
+
   float larghezzaTotale = LARGHEZZA_BOTTONE_EDITOR * 2.0f + SPAZIO_BOTTONI_EDITOR;
   float startX = (width - larghezzaTotale) / 2.0f;
   float btnY = height - MARGINE_BOTTONI_EDITOR_BASSO;
@@ -182,18 +174,21 @@ void inizializzaEditor() {
     );
 }
 
+// ============================================================================
+// CICLO DI RENDERING DISTINTO PER STATO
+// ============================================================================
+
 void draw() {
-  if (editorAperto) {
-    disegnaEditor();
-  } else if (patternAttivo == null) {
+  switch (statoCorrente) {
+  case MENU:
     disegnaMenu();
-  } else {
-    background(COLORE_SFONDO);
-    ArrayList<Quadro> snapshotQuadri = quadri;
-    for (Quadro q : snapshotQuadri) {
-      q.display();
-    }
-    mostraIstruzioni();
+    break;
+  case EDITOR:
+    disegnaEditor();
+    break;
+  case QUADRI:
+    disegnaVistaQuadri();
+    break;
   }
 }
 
@@ -222,127 +217,41 @@ void disegnaEditor() {
   image(sfondoMenuBuffer, 0, 0);
   float centroX = width / 2.0f;
 
-  // 1. Titolo Principale
   fill(COLORE_TESTO);
   textAlign(CENTER, CENTER);
   textSize(34);
   text("EDITOR PATTERN PERSONALIZZATO", centroX, 55);
 
-  // 2. Due Schede affiancate ad alta leggibilità (Comandi vs Manuale)
-  float margineLat = 50.0f;
   float spazioCard = 20.0f;
-  float cardW = (width - margineLat * 2.0f - spazioCard) / 2.0f;
+  float cardW = (width - BOX_EDITOR_X * 2.0f - spazioCard) / 2.0f;
   float cardY = 100.0f;
   float cardH = 285.0f;
 
-  // --- SCHEDA SINISTRA: MODALITÀ COMANDI ---
-  float card1X = margineLat;
-  fill(COLORE_BARRA_INFO);
-  stroke(COLORE_BOTTONE_CUSTOM);
-  strokeWeight(2);
-  rectMode(CORNER);
-  rect(card1X, cardY, cardW, cardH, 14);
-
-  noStroke();
-  textAlign(LEFT, TOP);
-  fill(COLORE_BOTTONE_CUSTOM);
-  textSize(20);
-  text("1. COMANDI RAPIDI", card1X + 20, cardY + 18);
-
-  fill(COLORE_TESTO);
-  textSize(16);
-  text("Formato:  Colonne x Righe; comandi", card1X + 20, cardY + 52);
-
-  fill(COLORE_SOTTOTITOLO);
-  textSize(15);
-  text(
-    "• Parola chiave:\n" +
-    "  riempi, bordo, scacchiera,\n" +
-    "  diagonali, croce, centro, angoli\n" +
-    "• Usa '-' davanti per svuotare\n" +
-    "• Sotto-griglie al centro (es. -6x6)",
-    card1X + 20, cardY + 84
+  disegnaSchedaGuida(
+    BOX_EDITOR_X, cardY, cardW, cardH,
+    COLORE_BOTTONE_CUSTOM,
+    "1. COMANDI RAPIDI",
+    "Formato:  Colonne x Righe; comandi",
+    "• Parola chiave:\n  riempi, bordo, scacchiera,\n  diagonali, croce, centro, angoli\n• Usa '-' davanti per svuotare\n• Sotto-griglie al centro (es. -6x6)",
+    "Esempi:  8x8; -6x6; 2x2   |   4x2"
     );
 
-  // Riquadro Esempio in evidenza (Card 1)
-  fill(COLORE_VALIDO);
-  textSize(16);
-  text("Esempi:  8x8; -6x6; 2x2   |   4x2", card1X + 20, cardY + 235);
-
-  // --- SCHEDA DESTRA: MODALITÀ MANUALE ---
-  float card2X = card1X + cardW + spazioCard;
-  fill(COLORE_BARRA_INFO);
-  stroke(COLORE_VALIDO);
-  strokeWeight(2);
-  rect(card2X, cardY, cardW, cardH, 14);
-
-  noStroke();
-  textAlign(LEFT, TOP);
-  fill(COLORE_VALIDO);
-  textSize(20);
-  text("2. DISEGNO MANUALE", card2X + 20, cardY + 18);
-
-  fill(COLORE_TESTO);
-  textSize(16);
-  text("Disegna riga per riga (max 25x25)", card2X + 20, cardY + 52);
-
-  fill(COLORE_SOTTOTITOLO);
-  textSize(15);
-  text(
-    "• 'X'  = inserisce un quadro\n" +
-    "• '.'  = lascia spazio vuoto\n" +
-    "• '/'  = va alla riga successiva\n\n" +
-    "Tutte le righe devono avere\n" +
-    "lo stesso numero di colonne.",
-    card2X + 20, cardY + 84
+  disegnaSchedaGuida(
+    BOX_EDITOR_X + cardW + spazioCard, cardY, cardW, cardH,
+    COLORE_VALIDO,
+    "2. DISEGNO MANUALE",
+    "Disegna riga per riga (max 25x25)",
+    "• 'X'  = inserisce un quadro\n• '.'  = lascia spazio vuoto\n• '/'  = va alla riga successiva\n\nTutte le righe devono avere\nlo stesso numero di colonne.",
+    "Esempio:  X.X / .X. / X.X"
     );
 
-  // Riquadro Esempio in evidenza (Card 2)
-  fill(COLORE_VALIDO);
-  textSize(16);
-  text("Esempio:  X.X / .X. / X.X", card2X + 20, cardY + 235);
+  campoInputPattern.display(validazioneCorrente.valido);
 
-  // 3. Casella di input testo (allargata per allinearsi alle due schede)
-  float inputX = margineLat;
-  float inputW = width - margineLat * 2.0f;
-  fill(COLORE_BOX_INPUT);
-  stroke(patternValido ? COLORE_VALIDO : COLORE_ERRORE);
-  strokeWeight(3);
-  rect(inputX, BOX_EDITOR_Y, inputW, BOX_EDITOR_H, 12);
-
-  // Testo e cursore mobile
-  noStroke();
-  textAlign(LEFT, CENTER);
-  textSize(FONT_INPUT_EDITOR);
-  float testoX = inputX + PADDING_TESTO_EDITOR;
-  float testoY = BOX_EDITOR_Y + BOX_EDITOR_H / 2.0f;
-
-  indiceCursore = constrain(indiceCursore, 0, inputUtente.length());
-
-  if (inputUtente.isEmpty()) {
-    fill(COLORE_SOTTOTITOLO);
-    text(PLACEHOLDER_EDITOR, testoX, testoY);
-    stroke(COLORE_TESTO);
-    strokeWeight(2);
-    line(testoX, BOX_EDITOR_Y + 16, testoX, BOX_EDITOR_Y + BOX_EDITOR_H - 16);
-  } else {
-    fill(COLORE_TESTO);
-    text(inputUtente, testoX, testoY);
-
-    String primaDelCursore = inputUtente.substring(0, indiceCursore);
-    float cursoreX = testoX + textWidth(primaDelCursore);
-
-    stroke(COLORE_VALIDO);
-    strokeWeight(2);
-    line(cursoreX, BOX_EDITOR_Y + 16, cursoreX, BOX_EDITOR_Y + BOX_EDITOR_H - 16);
-  }
-
-  // 4. Messaggio di validazione in evidenza
   noStroke();
   textAlign(CENTER, CENTER);
   textSize(18);
-  fill(patternValido ? COLORE_VALIDO : COLORE_ERRORE);
-  text(messaggioValidazione, centroX, BOX_EDITOR_Y + BOX_EDITOR_H + 36);
+  fill(validazioneCorrente.valido ? COLORE_VALIDO : COLORE_ERRORE);
+  text(validazioneCorrente.messaggio, centroX, BOX_EDITOR_Y + BOX_EDITOR_H + 36);
 
   fill(COLORE_TESTO);
   textSize(15);
@@ -350,6 +259,44 @@ void disegnaEditor() {
 
   btnAnnullaEditor.display();
   btnConfermaEditor.display();
+}
+
+void disegnaSchedaGuida(
+  float x, float y, float w, float h,
+  color coloreAccento, String titolo, String sottotitolo, String corpo, String esempio
+  ) {
+  fill(COLORE_BARRA_INFO);
+  stroke(coloreAccento);
+  strokeWeight(2);
+  rectMode(CORNER);
+  rect(x, y, w, h, 14);
+
+  noStroke();
+  textAlign(LEFT, TOP);
+  fill(coloreAccento);
+  textSize(20);
+  text(titolo, x + 20, y + 18);
+
+  fill(COLORE_TESTO);
+  textSize(16);
+  text(sottotitolo, x + 20, y + 52);
+
+  fill(COLORE_SOTTOTITOLO);
+  textSize(15);
+  text(corpo, x + 20, y + 84);
+
+  fill(COLORE_VALIDO);
+  textSize(16);
+  text(esempio, x + 20, y + 235);
+}
+
+void disegnaVistaQuadri() {
+  background(COLORE_SFONDO);
+  ArrayList<Quadro> snapshotQuadri = quadri;
+  for (Quadro q : snapshotQuadri) {
+    q.display();
+  }
+  mostraIstruzioni();
 }
 
 void mostraIstruzioni() {
@@ -360,7 +307,6 @@ void mostraIstruzioni() {
   fill(COLORE_BARRA_INFO);
   rect(0, barraY, width, ALTEZZA_BARRA_INFO);
 
-  // Linea superiore di separazione per mettere in risalto la barra
   stroke(COLORE_BOTTONE_CUSTOM);
   strokeWeight(2);
   line(0, barraY, width, barraY);
@@ -373,384 +319,20 @@ void mostraIstruzioni() {
   text(testo, width / 2.0f, barraY + ALTEZZA_BARRA_INFO / 2.0f);
 }
 
-/**
- * Verifica se una stringa rispetta il formato "CxR" (colonne x righe) e restituisce [colonne, righe].
- * Restituisce null se il formato o i limiti [DIM_GRIGLIA_MIN, DIM_GRIGLIA_MAX] non sono validi.
- */
-int[] parseDimensioni(String token) {
-  String[] parti = split(trim(token), 'x');
-  if (parti.length != 2) return null;
-
-  try {
-    int colonne = Integer.parseInt(trim(parti[0]));
-    int righe = Integer.parseInt(trim(parti[1]));
-    if (colonne < DIM_GRIGLIA_MIN || colonne > DIM_GRIGLIA_MAX ||
-      righe < DIM_GRIGLIA_MIN || righe > DIM_GRIGLIA_MAX) {
-      return null;
-    }
-    return new int[]{colonne, righe};
-  }
-  catch (NumberFormatException e) {
-    return null;
-  }
-}
-
-/**
- * Verifica la correttezza sintattica e geometrica del pattern inserito dall'utente.
- */
-void aggiornaValidazione() {
-  String pulito = trim(inputUtente).toLowerCase();
-  if (pulito.length() == 0) {
-    patternValido = false;
-    messaggioValidazione = "Errore: il pattern non può essere vuoto.";
-    return;
-  }
-
-  // Caso A: Griglia manuale con '/' (supporta anche rettangoli CxR)
-  if (pulito.contains(String.valueOf(SEPARATORE_RIGHE))) {
-    String[] righeArr = split(trim(inputUtente), SEPARATORE_RIGHE);
-    int numRighe = righeArr.length;
-    if (numRighe < DIM_GRIGLIA_MIN || numRighe > DIM_GRIGLIA_MAX) {
-      patternValido = false;
-      messaggioValidazione = "Errore: le righe devono essere tra " + DIM_GRIGLIA_MIN + " e " + DIM_GRIGLIA_MAX + ".";
-      return;
-    }
-
-    int numColonne = trim(righeArr[0]).length();
-    if (numColonne < DIM_GRIGLIA_MIN || numColonne > DIM_GRIGLIA_MAX) {
-      patternValido = false;
-      messaggioValidazione = "Errore: le colonne devono essere tra " + DIM_GRIGLIA_MIN + " e " + DIM_GRIGLIA_MAX + ".";
-      return;
-    }
-
-    int cellePiene = 0;
-    for (int r = 0; r < numRighe; r++) {
-      String riga = trim(righeArr[r]);
-      if (riga.length() != numColonne) {
-        patternValido = false;
-        messaggioValidazione = "Errore riga " + (r + 1) + ": servono " + numColonne + " colonne (trovate " + riga.length() + ").";
-        return;
-      }
-      for (int c = 0; c < numColonne; c++) {
-        char ch = Character.toUpperCase(riga.charAt(c));
-        if (ch != SIMBOLO_PIENO && ch != SIMBOLO_VUOTO) {
-          patternValido = false;
-          messaggioValidazione = "Errore: carattere non valido '" + riga.charAt(c) + "'. Usa solo X e .";
-          return;
-        }
-        if (ch == SIMBOLO_PIENO) cellePiene++;
-      }
-    }
-
-    if (cellePiene == 0) {
-      patternValido = false;
-      messaggioValidazione = "Attenzione: il pattern non contiene nessun quadro ('X').";
-      return;
-    }
-    patternValido = true;
-    messaggioValidazione = "Pattern manuale valido (" + numColonne + "x" + numRighe + ", " + cellePiene + " quadri).";
-    return;
-  }
-
-  // Caso B: Comandi dichiarativi (<C>x<R> [; cmd1; cmd2; -<subC>x<subR>])
-  String[] istruzioni = split(pulito, ';');
-  int[] dims = parseDimensioni(istruzioni[0]);
-  if (dims == null) {
-    patternValido = false;
-    messaggioValidazione = "Errore: usa formato Colonne x Righe tra " + DIM_GRIGLIA_MIN + " e " + DIM_GRIGLIA_MAX + " (es. 4x2 o 16x16).";
-    return;
-  }
-
-  int colonne = dims[0];
-  int righe = dims[1];
-
-  // Controlla se ci sono istruzioni reali dopo il primo token
-  boolean haIstruzioniReali = false;
-  for (int i = 1; i < istruzioni.length; i++) {
-    String cmd = trim(istruzioni[i]);
-    if (cmd.length() == 0) continue;
-    haIstruzioniReali = true;
-
-    if (cmd.startsWith("-")) cmd = trim(cmd.substring(1));
-
-    // Può essere un comando testuale oppure una sotto-griglia centrale (es. 8x8)
-    int[] subDims = parseDimensioni(cmd);
-    if (subDims != null) {
-      if (subDims[0] > colonne || subDims[1] > righe) {
-        patternValido = false;
-        messaggioValidazione = "Errore: il blocco '" + cmd + "' supera la griglia " + colonne + "x" + righe + ".";
-        return;
-      }
-    } else if (!COMANDI_VALIDI.contains(cmd)) {
-      patternValido = false;
-      messaggioValidazione = "Comando sconosciuto: '" + cmd + "'.";
-      return;
-    }
-  }
-
-  boolean[][] test = valutaPattern(inputUtente);
-  int attivi = 0;
-  for (int r = 0; r < righe; r++) {
-    for (int c = 0; c < colonne; c++) {
-      if (test[r][c]) attivi++;
-    }
-  }
-
-  if (attivi == 0) {
-    patternValido = false;
-    messaggioValidazione = "Attenzione: il pattern risultante è vuoto (0 quadri).";
-    return;
-  }
-
-  patternValido = true;
-  String notaImplicita = haIstruzioniReali ? "" : " - riempimento automatico";
-  messaggioValidazione = "Pattern valido (" + colonne + " col x " + righe + " righe, " + attivi + " quadri" + notaImplicita + ").";
-}
-
-/**
- * Compila una stringa DSL in una matrice booleana [righe][colonne].
- */
-/**
- * Compila una stringa DSL in una matrice booleana [righe][colonne],
- * instradando ogni istruzione tramite switch verso la relativa funzione geometrica.
- *
- * @param pattern Stringa di configurazione (es. "8x8; -7x7; 6x6" oppure "XX. / XXX / .XX").
- * @return Matrice booleana dove true indica la presenza di un Quadro.
- */
-boolean[][] valutaPattern(String pattern) {
-  String pulito = trim(pattern).toLowerCase();
-
-  // Caso 1: Matrice manuale esplicita (es. "XX. / XXX / .XX")
-  if (pulito.contains(String.valueOf(SEPARATORE_RIGHE))) {
-    return compilaGrigliaManuale(trim(pattern));
-  }
-
-  // Caso 2: Comandi dichiarativi (<C>x<R>; cmd1; cmd2; ...)
-  String[] istruzioni = split(pulito, ';');
-  int[] dims = parseDimensioni(istruzioni[0]);
-  int colonne = dims[0];
-  int righe = dims[1];
-  boolean[][] griglia = new boolean[righe][colonne];
-
-  // Estrae i soli comandi non vuoti successivi alla dimensione
-  ArrayList<String> comandi = estraiComandi(istruzioni);
-
-  // Se non ci sono comandi (es. "16x16") -> riempimento implicito
-  if (comandi.isEmpty()) {
-    applicaComandoRiempi(griglia, true);
-    return griglia;
-  }
-
-  // Se la prima operazione è una sottrazione (es. "8x8; -7x7; 6x6"), parte dalla griglia piena
-  if (comandi.get(0).startsWith("-")) {
-    applicaComandoRiempi(griglia, true);
-  }
-
-  // Esegue in sequenza ogni comando tramite switch
-  for (String rawCmd : comandi) {
-    boolean valore = !rawCmd.startsWith("-");
-    String cmd = valore ? rawCmd : trim(rawCmd.substring(1));
-
-    int[] subDims = parseDimensioni(cmd);
-    String tipoOperazione = (subDims != null) ? "subgriglia" : cmd;
-
-    switch (tipoOperazione) {
-    case "subgriglia":
-      if (subDims != null) {
-        applicaSubGrigliaCentrata(griglia, subDims[0], subDims[1], valore);
-      }
-      break;
-    case "riempi":
-      applicaComandoRiempi(griglia, valore);
-      break;
-    case "bordo":
-      applicaComandoBordo(griglia, valore);
-      break;
-    case "scacchiera":
-      applicaComandoScacchiera(griglia, valore);
-      break;
-    case "diagonali":
-      applicaComandoDiagonali(griglia, valore);
-      break;
-    case "centro":
-      applicaComandoCentro(griglia, valore);
-      break;
-    case "angoli":
-      applicaComandoAngoli(griglia, valore);
-      break;
-    case "croce":
-      applicaComandoCroce(griglia, valore);
-      break;
-    }
-  }
-
-  return griglia;
-}
-
 // ============================================================================
-// FUNZIONI DEDICATE AL CALCOLO DEI PATTERN
+// GENERAZIONE QUADRI E GESTIONE DEGLI INPUT PER STATO
 // ============================================================================
 
-/**
- * Filtra i token successivi al primo eliminando eventuali stringhe vuote.
- */
-ArrayList<String> estraiComandi(String[] istruzioni) {
-  ArrayList<String> lista = new ArrayList<String>();
-  for (int i = 1; i < istruzioni.length; i++) {
-    String token = trim(istruzioni[i]);
-    if (token.length() > 0) {
-      lista.add(token);
-    }
-  }
-  return lista;
+void avviaVisualizzazioneQuadri(String pattern) {
+  patternAttivo = pattern;
+  generaQuadriDaPattern(patternAttivo);
+  statoCorrente = StatoApp.QUADRI;
+  redraw();
 }
 
-/**
- * Compila una matrice esplicita formattata con 'X', '.' e '/'.
- */
-boolean[][] compilaGrigliaManuale(String pattern) {
-  String[] righeArr = split(pattern, SEPARATORE_RIGHE);
-  int righe = righeArr.length;
-  int colonne = trim(righeArr[0]).length();
-  boolean[][] griglia = new boolean[righe][colonne];
-
-  for (int r = 0; r < righe; r++) {
-    String riga = trim(righeArr[r]);
-    for (int c = 0; c < colonne; c++) {
-      griglia[r][c] = (Character.toUpperCase(riga.charAt(c)) == SIMBOLO_PIENO);
-    }
-  }
-  return griglia;
-}
-
-/**
- * Applica un blocco rettangolare centrato calcolando la distanza dal baricentro della matrice.
- * Se griglia e blocco hanno la stessa parità (entrambi pari o entrambi dispari),
- * la centratura è geometricamente esatta; in caso di parità mista, allinea al centro intero.
- *
- * @param griglia Matrice booleana [righe][colonne] da modificare.
- * @param subC    Numero di colonne del blocco centrale.
- * @param subR    Numero di righe del blocco centrale.
- * @param valore  Valore booleano da assegnare (true = pieno, false = vuoto).
- */
-void applicaSubGrigliaCentrata(boolean[][] griglia, int subC, int subR, boolean valore) {
-  int righe = griglia.length;
-  int colonne = griglia[0].length;
-
-  float centroC = (colonne - 1) / 2.0f;
-  float centroR = (righe - 1) / 2.0f;
-
-  // Se la parità tra griglia e sotto-blocco è diversa (es. 1x1 dentro 8x8),
-  // sposta il centro di 0.5 per centrare sulla cella mediana inferiore
-  if ((colonne % 2) != (subC % 2)) centroC -= 0.5f;
-  if ((righe % 2) != (subR % 2)) centroR -= 0.5f;
-
-  float metaC = subC / 2.0f;
-  float metaR = subR / 2.0f;
-
-  for (int r = 0; r < righe; r++) {
-    for (int c = 0; c < colonne; c++) {
-      if (abs(c - centroC) < metaC && abs(r - centroR) < metaR) {
-        griglia[r][c] = valore;
-      }
-    }
-  }
-}
-
-/**
- * Imposta tutte le celle della griglia al valore booleano specificato.
- */
-void applicaComandoRiempi(boolean[][] griglia, boolean valore) {
-  for (int r = 0; r < griglia.length; r++) {
-    for (int c = 0; c < griglia[0].length; c++) {
-      griglia[r][c] = valore;
-    }
-  }
-}
-
-/**
- * Seleziona il perimetro esterno della griglia (prima/ultima riga e prima/ultima colonna).
- */
-void applicaComandoBordo(boolean[][] griglia, boolean valore) {
-  int righe = griglia.length;
-  int colonne = griglia[0].length;
-  for (int r = 0; r < righe; r++) {
-    for (int c = 0; c < colonne; c++) {
-      if (r == 0 || r == righe - 1 || c == 0 || c == colonne - 1) {
-        griglia[r][c] = valore;
-      }
-    }
-  }
-}
-
-/**
- * Seleziona le celle a parità uniforme ((r + c) % 2 == 0).
- */
-void applicaComandoScacchiera(boolean[][] griglia, boolean valore) {
-  for (int r = 0; r < griglia.length; r++) {
-    for (int c = 0; c < griglia[0].length; c++) {
-      if ((r + c) % 2 == 0) {
-        griglia[r][c] = valore;
-      }
-    }
-  }
-}
-
-/**
- * Seleziona le diagonali principali della griglia.
- */
-void applicaComandoDiagonali(boolean[][] griglia, boolean valore) {
-  int righe = griglia.length;
-  int colonne = griglia[0].length;
-  for (int r = 0; r < righe; r++) {
-    for (int c = 0; c < colonne; c++) {
-      if (r == c || r + c == colonne - 1 || r + c == righe - 1) {
-        griglia[r][c] = valore;
-      }
-    }
-  }
-}
-
-/**
- * Seleziona la cella centrale (o le celle mediane).
- */
-void applicaComandoCentro(boolean[][] griglia, boolean valore) {
-  int rCentro = griglia.length / 2;
-  int cCentro = griglia[0].length / 2;
-  griglia[rCentro][cCentro] = valore;
-}
-
-/**
- * Seleziona i quattro vertici esterni della griglia.
- */
-void applicaComandoAngoli(boolean[][] griglia, boolean valore) {
-  int maxR = griglia.length - 1;
-  int maxC = griglia[0].length - 1;
-  griglia[0][0] = valore;
-  griglia[0][maxC] = valore;
-  griglia[maxR][0] = valore;
-  griglia[maxR][maxC] = valore;
-}
-
-/**
- * Seleziona la riga mediana e la colonna mediana formando una croce.
- */
-void applicaComandoCroce(boolean[][] griglia, boolean valore) {
-  int righe = griglia.length;
-  int colonne = griglia[0].length;
-  int rCentro = righe / 2;
-  int cCentro = colonne / 2;
-
-  for (int c = 0; c < colonne; c++) griglia[rCentro][c] = valore;
-  for (int r = 0; r < righe; r++) griglia[r][cCentro] = valore;
-}
-
-/**
- * Genera i Quadri adattando le celle quadrate a griglie sia quadrate sia rettangolari (Colonne x Righe).
- */
 void generaQuadriDaPattern(String pattern) {
   ArrayList<Quadro> nuovaLista = new ArrayList<Quadro>();
-  boolean[][] griglia = valutaPattern(pattern);
+  boolean[][] griglia = patternEngine.valutaPattern(pattern);
   int righe = griglia.length;
   int colonne = griglia[0].length;
 
@@ -778,135 +360,92 @@ void generaQuadriDaPattern(String pattern) {
 }
 
 void mousePressed() {
-  if (editorAperto) {
-    float boxW = width - BOX_EDITOR_X * 2.0f;
+  switch (statoCorrente) {
+  case MENU:
+    gestisciMouseMenu();
+    break;
+  case EDITOR:
+    gestisciMouseEditor();
+    break;
+  case QUADRI:
+    generaQuadriDaPattern(patternAttivo);
+    redraw();
+    break;
+  }
+}
 
-    // Clic dentro la casella di testo -> posiziona il cursore nel punto cliccato
-    if (mouseX >= BOX_EDITOR_X && mouseX <= BOX_EDITOR_X + boxW &&
-      mouseY >= BOX_EDITOR_Y && mouseY <= BOX_EDITOR_Y + BOX_EDITOR_H) {
-
-      textSize(FONT_INPUT_EDITOR);
-      float testoX = BOX_EDITOR_X + PADDING_TESTO_EDITOR;
-      float clickRelativoX = mouseX - testoX;
-
-      int migliorIndice = inputUtente.length();
-      for (int i = 0; i <= inputUtente.length(); i++) {
-        float wCorrente = textWidth(inputUtente.substring(0, i));
-        if (i < inputUtente.length()) {
-          float wProssimo = textWidth(inputUtente.substring(0, i + 1));
-          float puntoMedio = (wCorrente + wProssimo) / 2.0f;
-          if (clickRelativoX < puntoMedio) {
-            migliorIndice = i;
-            break;
-          }
-        }
-      }
-      indiceCursore = migliorIndice;
-      redraw();
-      return;
-    }
-
-    if (btnAnnullaEditor.isClicked(mouseX, mouseY)) {
-      editorAperto = false;
-      redraw();
-    } else if (btnConfermaEditor.isClicked(mouseX, mouseY) && patternValido) {
-      editorAperto = false;
-      patternAttivo = inputUtente;
-      generaQuadriDaPattern(patternAttivo);
-      redraw();
-    }
+void gestisciMouseMenu() {
+  if (toggleSfondo.isClicked(mouseX, mouseY)) {
+    sfondoAttivo = !sfondoAttivo;
+    redraw();
     return;
   }
 
-  if (patternAttivo == null) {
-    if (toggleSfondo.isClicked(mouseX, mouseY)) {
-      sfondoAttivo = !sfondoAttivo;
-      redraw();
-      return;
-    }
-
-    if (btnApriEditor.isClicked(mouseX, mouseY)) {
-      editorAperto = true;
-      indiceCursore = inputUtente.length();
-      aggiornaValidazione();
-      redraw();
-      return;
-    }
-
-    for (Card c : menuCards) {
-      if (c.isClicked(mouseX, mouseY)) {
-        modalitaCorrente = c.modalita;
-        patternAttivo = modalitaCorrente.pattern;
-        generaQuadriDaPattern(patternAttivo);
-        redraw();
-        break;
-      }
-    }
-  } else {
-    generaQuadriDaPattern(patternAttivo);
+  if (btnApriEditor.isClicked(mouseX, mouseY)) {
+    campoInputPattern.posizionaCursoreAllaFine();
+    validazioneCorrente = patternEngine.valida(campoInputPattern.getTesto());
+    statoCorrente = StatoApp.EDITOR;
     redraw();
+    return;
+  }
+
+  for (Card c : menuCards) {
+    if (c.isClicked(mouseX, mouseY)) {
+      avviaVisualizzazioneQuadri(c.modalita.pattern);
+      break;
+    }
+  }
+}
+
+void gestisciMouseEditor() {
+  if (campoInputPattern.isClicked(mouseX, mouseY)) {
+    campoInputPattern.aggiornaCursoreDaMouse(mouseX);
+    redraw();
+  } else if (btnAnnullaEditor.isClicked(mouseX, mouseY)) {
+    statoCorrente = StatoApp.MENU;
+    redraw();
+  } else if (btnConfermaEditor.isClicked(mouseX, mouseY) && validazioneCorrente.valido) {
+    avviaVisualizzazioneQuadri(campoInputPattern.getTesto());
   }
 }
 
 void keyPressed() {
-  if (editorAperto) {
-    indiceCursore = constrain(indiceCursore, 0, inputUtente.length());
-
-    if (key == ESC) {
-      key = 0; // Impedisce a Processing di chiudere la finestra
-      editorAperto = false;
-      redraw();
-    } else if (key == ENTER || key == RETURN) {
-      if (patternValido) {
-        editorAperto = false;
-        patternAttivo = inputUtente;
-        generaQuadriDaPattern(patternAttivo);
-        redraw();
-      }
-    } else if (key == CODED) {
-      if (keyCode == LEFT && indiceCursore > 0) {
-        indiceCursore--;
-        redraw();
-      } else if (keyCode == RIGHT && indiceCursore < inputUtente.length()) {
-        indiceCursore++;
-        redraw();
-      } else if (keyCode == java.awt.event.KeyEvent.VK_HOME) {
-        indiceCursore = 0;
-        redraw();
-      } else if (keyCode == java.awt.event.KeyEvent.VK_END) {
-        indiceCursore = inputUtente.length();
-        redraw();
-      }
-    } else if (key == BACKSPACE) {
-      if (indiceCursore > 0) {
-        inputUtente = inputUtente.substring(0, indiceCursore - 1) + inputUtente.substring(indiceCursore);
-        indiceCursore--;
-        aggiornaValidazione();
-        redraw();
-      }
-    } else if (key == DELETE) {
-      if (indiceCursore < inputUtente.length()) {
-        inputUtente = inputUtente.substring(0, indiceCursore) + inputUtente.substring(indiceCursore + 1);
-        aggiornaValidazione();
-        redraw();
-      }
-    } else if (key == '-' || (key >= 32 && key <= 126)) {
-      if (inputUtente.length() < 60) {
-        inputUtente = inputUtente.substring(0, indiceCursore) + key + inputUtente.substring(indiceCursore);
-        indiceCursore++;
-        aggiornaValidazione();
-        redraw();
-      }
-    }
-    return;
+  switch (statoCorrente) {
+  case EDITOR:
+    gestisciTastieraEditor();
+    break;
+  case QUADRI:
+    gestisciTastieraQuadri();
+    break;
+  default:
+    break;
   }
+}
 
-  // Gestione navigazione nella schermata dei quadri
-  if (Character.toLowerCase(key) == TASTO_INDIETRO) {
-    modalitaCorrente = null;
-    patternAttivo = null;
+void gestisciTastieraEditor() {
+  if (key == ESC) {
+    key = 0; // Impedisce a Processing di chiudere lo sketch
+    statoCorrente = StatoApp.MENU;
     redraw();
-  } else if (patternAttivo != null && key != CODED && Character.isLetter(key)) {
+  } else if (key == ENTER || key == RETURN) {
+    if (validazioneCorrente.valido) {
+      avviaVisualizzazioneQuadri(campoInputPattern.getTesto());
+    }
+  } else {
+    boolean testoModificato = campoInputPattern.gestisciTasto(key, keyCode);
+    if (testoModificato) {
+      validazioneCorrente = patternEngine.valida(campoInputPattern.getTesto());
+    }
+    redraw();
+  }
+}
+
+void gestisciTastieraQuadri() {
+  if (Character.toLowerCase(key) == TASTO_INDIETRO) {
+    patternAttivo = null;
+    statoCorrente = StatoApp.MENU;
+    redraw();
+  } else if (key != CODED && Character.isLetter(key)) {
     generaQuadriDaPattern(patternAttivo);
     redraw();
   }
